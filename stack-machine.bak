@@ -1,0 +1,289 @@
+#lang racket
+(require "opcodes.rkt")
+(provide make-stack-machine)
+(provide run-stack-machine)
+(provide get-stack)
+(provide get-varnames)
+(provide get-consts)
+(provide get-names)
+(provide get-code)
+(provide get-IC)
+(provide empty-stack)
+(provide make-stack)
+(provide push)
+(provide pop)
+(provide top)
+
+;(define currentNameSpace (make-base-namespace))
+(define-namespace-anchor a)
+(define ns (namespace-anchor->namespace a))
+
+;; TODO 1:
+;; Alegeți metoda de reprezentarea a unei stive.
+;; Implementați:
+(define empty-stack
+  '()
+)
+
+(define (make-stack)
+  empty-stack
+)
+
+(define (push currentElement stack)
+  (append (list currentElement) stack)
+)
+
+
+(define (top stack)
+  (car stack)
+)
+
+(define (pop stack)
+  (cdr stack)
+)
+
+;; TODO 2:
+;; Alegeți metoda de reprezentare a unei mașini stivă.
+;; Definiți make-stack-machine, acesta trebuie sa primeasca cele 4 segmente de date
+;; Veți avea nevoie de o stivă pentru execuție și un counter ca să stiți
+;; la ce instrucțiune sunteți.
+
+(define (make-stack-machine stack co-varnames co-consts co-names co-code IC)
+  (list stack co-varnames co-consts co-names co-code IC)
+)
+
+;; Definiți funcțiile `get-varnames`, `get-consts`, `get-names`,
+;; `get-code`, `get-stack`, `get-IC` care primesc o mașina stivă și întorc
+;; componenta respectivă
+
+;; ex:
+;; > (get-varnames (make-stack-machine empty-stack 'dummy-co-varnames (hash) (hash) (list) 0))
+;; 'dummy-co-varnames
+(define (get-varnames stack-machine)
+  (cadr stack-machine)
+)
+
+;; ex:
+;; > (get-consts (make-stack-machine empty-stack (hash) 'dummy-co-consts (hash) (list) 0))
+;; 'dummy-co-consts
+(define (get-consts stack-machine)
+  (caddr stack-machine)
+)
+
+;; ex:
+;; > (get-names (make-stack-machine empty-stack (hash) (hash) 'dummy-co-names (list) 0))
+;; 'dummy-co-names
+(define (get-names stack-machine)
+  (cadddr stack-machine)
+)
+
+;; ex:
+;; > (get-code (make-stack-machine empty-stack (hash) (hash) (hash) 'dummy-co-code 0))
+;; dummy-co-code
+(define (get-code stack-machine)
+  (cadddr (cdr stack-machine))
+)
+
+;; Întoarce stiva de execuție.
+;; ex:
+;; > (get-code (make-stack-machine 'dummy-exec-stack (hash) (hash) (hash) (list) 0))
+;; dummy-exec-stack
+(define (get-stack stack-machine)
+  (car stack-machine)
+)
+
+;; Întoarce instruction counterul.
+;; ex:
+;; > (get-code (make-stack-machine empty-stack (hash) (hash) (hash) (list) 0))
+;; 0
+(define (get-IC stack-machine)
+  (cadddr (cddr stack-machine))
+)
+
+(define symbols (list 'STACK 'CO-VARNAMES 'CO-CONSTS 'CO-NAMES 'CO-CODE 'INSTRUCTION-COUNTER))
+
+;; Definiți funcția get-symbol-index care gasește index-ul simbolului in listă.
+(define (get-symbol-index symbol)
+  (let iter ((symbols symbols) (symbolIndex 0))
+    (if (equal? (car symbols) symbol)
+        symbolIndex
+        (iter (cdr symbols) (+ symbolIndex 1))
+     )
+  )
+)
+
+;; Definiți funcția update-stack-machine care intoarce o noua mașina stivă
+;; înlocuind componenta corespondentă simbolului cu item-ul dat în paremetri.
+;; > (get-varnames (update-stack-machine 'CO-VARNAMES "new-varnames" stack-machine))
+;; "new-varnames"
+;; > (get-varnames (update-stack-machine 'CO-NAMES "new-names" stack-machine))
+;; "new-names"
+
+(define (replace-nth-param stack-machine n item)
+  (if (= n 0)
+      (append (list item) (cdr stack-machine))
+      (append (list (car stack-machine)) (replace-nth-param (cdr stack-machine) (- n 1) item))
+  )
+)
+
+(define (update-stack-machine item symbol stack-machine)
+  (replace-nth-param stack-machine (get-symbol-index item) symbol)
+)
+
+;; Definiți funcția push-exec-stack care primește o masină stivă și o valoare
+;; și intoarce o noua mașina unde valoarea este pusă pe stiva de execuție
+(define (push-exec-stack value stack-machine)
+  (make-stack-machine
+     (push value (get-stack stack-machine))
+     (get-varnames stack-machine)
+     (get-consts stack-machine)
+     (get-names stack-machine)
+     (get-code stack-machine)
+     (get-IC stack-machine)
+   )
+)
+
+;; Definiți funcția pop-exec-stack care primește o masină stivă
+;; și intoarce o noua mașina aplicând pop pe stiva de execuție.
+(define (pop-exec-stack stack-machine)
+  (make-stack-machine
+     (pop (get-stack stack-machine))
+     (get-varnames stack-machine)
+     (get-consts stack-machine)
+     (get-names stack-machine)
+     (get-code stack-machine)
+     (get-IC stack-machine)
+   )
+)
+
+;; Definiți funcția run-stack-machine care execută operații pană epuizează co-code.
+(define (run-stack-machine stack-machine)
+  (pretty-print (get-varnames stack-machine))
+  (if (equal?(- (length (get-code stack-machine)) 1) (get-IC stack-machine))
+      stack-machine
+      (run-stack-machine
+         (let
+             (
+              (newStackMachine
+               (apply
+                (eval (car (list-ref (get-code stack-machine) (get-IC stack-machine))) ns)
+                stack-machine
+                (list (cdr (list-ref (get-code stack-machine) (get-IC stack-machine))))
+                )
+              )
+             )
+             (update-stack-machine 'INSTRUCTION-COUNTER (+ (get-IC newStackMachine) 1) newStackMachine)
+         )  
+      )
+  )
+)
+
+(define (POP_TOP stack-machine)
+  (pop-exec-stack stack-machine)
+)
+
+(define (LOAD_CONST stack-machine const_i)
+  (pretty-print "LOAD_CONST called")
+  (push-exec-stack (hash-ref (get-consts stack-machine) const_i) stack-machine)
+)
+
+(define (STORE_FAST stack-machine var_i)
+  (pretty-print "STORE_FAST called")
+  (POP_TOP (update-stack-machine 'CO-VARNAMES (hash-set (get-varnames stack-machine) var_i (top (get-stack stack-machine))) stack-machine))
+)
+
+(define (LOAD_FAST stack-machine var_i)
+  (pretty-print "LOAD_FAST called")
+  (push-exec-stack (hash-ref (get-varnames stack-machine) var_i) stack-machine)
+)
+
+(define (LOAD_GLOBAL stack-machine func_i)
+  (pretty-print "LOAD_GLOBAL called")
+  (push-exec-stack (hash-ref (get-names stack-machine) func_i) stack-machine)
+)
+
+(define (BINARY_MODULO stack-machine uselessParam)
+  (pretty-print "BINARY_MODULO called")
+  (let
+      (
+          (TOS (top (get-stack stack-machine)))
+          (TOS1 (top (get-stack (pop-exec-stack stack-machine))))
+      )
+      (push-exec-stack (modulo TOS1 TOS) (pop-exec-stack stack-machine))
+  )
+)
+
+(define (BINARY_ADD stack-machine uselessParam)
+  (pretty-print "BINARY_ADD called")
+  (let
+      (
+          (TOS (top (get-stack stack-machine)))
+          (TOS1 (top (get-stack (pop-exec-stack stack-machine))))
+      )
+      (push-exec-stack (+ TOS1 TOS) (pop-exec-stack stack-machine))
+  )
+)
+
+(define (BINARY_SUBTRACT stack-machine uselessParam)
+  (pretty-print "BINARY_SUBSTRACT called")
+  (let
+      (
+          (TOS (top (get-stack stack-machine)))
+          (TOS1 (top (get-stack (pop-exec-stack stack-machine))))
+      )
+      (push-exec-stack (- TOS1 TOS) (pop-exec-stack stack-machine))
+  )
+)
+
+(define (JUMP_ABSOLUTE stack-machine target)
+  (pretty-print "JUMP-ABSOLUTE called")
+  (update-stack-machine 'INSTRUCTION-COUNTER (- (/ target 2) 1) stack-machine)
+)
+
+(define (COMPARE_OP stack-machine cmp_i)
+  (pretty-print "COMPARE_OP called")
+  (let
+      (
+          (TOS (top (get-stack stack-machine)))
+          (TOS1 (top (get-stack (pop-exec-stack stack-machine))))
+      )
+      (pretty-print ((get-cmpop cmp_i) TOS1 TOS))
+      (push-exec-stack ((get-cmpop cmp_i) TOS1 TOS) (pop-exec-stack (pop-exec-stack stack-machine)))
+  )
+)
+
+(define (POP_JUMP_IF_FALSE stack-machine target)
+  (pretty-print "POP_JUMP_IF_FALSE called")
+  (if (equal? (top (get-stack stack-machine)) #f)
+      (JUMP_ABSOLUTE (pop-exec-stack stack-machine) target)
+      (pop-exec-stack stack-machine)
+  )
+)
+
+(define (POP_JUMP_IF_TRUE stack-machine target)
+  (pretty-print "POP_JUMP_IF_TRUE called")
+  (if (equal? (top (get-stack stack-machine)) #t)
+      (JUMP_ABSOLUTE (pop-exec-stack stack-machine) target)
+      (pop-exec-stack stack-machine)
+  )
+)
+
+(define (INPLACE_ADD stack-machine uselessParam)
+  (pretty-print "INPLACE_ADD called")
+  (BINARY_ADD stack-machine uselessParam)
+)
+
+(define (INPLACE_SUBTRACT stack-machine uselessParam)
+  (pretty-print "INPLACE_SUBTRACT called")
+  (BINARY_SUBTRACT stack-machine uselessParam)
+)
+
+(define (INPLACE_MODULO stack-machine uselessParam)
+  (pretty-print "INPLACE_MODULO called")
+  (BINARY_MODULO stack-machine uselessParam)
+)
+
+(define (RETURN_VALUE . stack-machine)
+  (pretty-print "RETURN_VALUE called")
+  stack-machine
+)
